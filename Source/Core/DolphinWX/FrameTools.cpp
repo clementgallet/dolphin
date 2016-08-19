@@ -193,7 +193,14 @@ wxMenuBar* CFrame::CreateMenu()
   movieMenu->Append(IDM_RECORD, GetMenuLabel(HK_START_RECORDING));
   movieMenu->Append(IDM_PLAY_RECORD, GetMenuLabel(HK_PLAY_RECORDING));
   movieMenu->Append(IDM_RECORD_EXPORT, GetMenuLabel(HK_EXPORT_RECORDING));
-  movieMenu->Append(IDM_RECORD_READ_ONLY, GetMenuLabel(HK_READ_ONLY_MODE), wxEmptyString,
+  //movieMenu->Append(IDM_RECORD_READ_ONLY_P1, GetMenuLabel(HK_READ_ONLY_MODE), wxEmptyString,
+  movieMenu->Append(IDM_RECORD_READ_ONLY_P1, GetMenuLabel(HK_READ_ONLY_MODE), wxEmptyString,
+                    wxITEM_CHECK);
+  movieMenu->Append(IDM_RECORD_READ_ONLY_P2, GetMenuLabel(HK_READ_ONLY_MODE), wxEmptyString,
+                    wxITEM_CHECK);
+  movieMenu->Append(IDM_RECORD_READ_ONLY_P3, GetMenuLabel(HK_READ_ONLY_MODE), wxEmptyString,
+                    wxITEM_CHECK);
+  movieMenu->Append(IDM_RECORD_READ_ONLY_P4, GetMenuLabel(HK_READ_ONLY_MODE), wxEmptyString,
                     wxITEM_CHECK);
   movieMenu->Append(IDM_TAS_INPUT, _("TAS Input"));
   movieMenu->AppendSeparator();
@@ -203,7 +210,10 @@ wxMenuBar* CFrame::CreateMenu()
   movieMenu->Check(IDM_SHOW_LAG, SConfig::GetInstance().m_ShowLag);
   movieMenu->AppendCheckItem(IDM_SHOW_FRAME_COUNT, _("Show Frame Counter"));
   movieMenu->Check(IDM_SHOW_FRAME_COUNT, SConfig::GetInstance().m_ShowFrameCount);
-  movieMenu->Check(IDM_RECORD_READ_ONLY, true);
+  movieMenu->Check(IDM_RECORD_READ_ONLY_P1, true);
+  movieMenu->Check(IDM_RECORD_READ_ONLY_P2, true);
+  movieMenu->Check(IDM_RECORD_READ_ONLY_P3, true);
+  movieMenu->Check(IDM_RECORD_READ_ONLY_P4, true);
   movieMenu->AppendCheckItem(IDM_SHOW_INPUT_DISPLAY, _("Show Input Display"));
   movieMenu->Check(IDM_SHOW_INPUT_DISPLAY, SConfig::GetInstance().m_ShowInputDisplay);
   movieMenu->AppendCheckItem(IDM_SHOW_RTC_DISPLAY, _("Show System Clock"));
@@ -697,9 +707,24 @@ void CFrame::DoOpen(bool Boot)
   }
 }
 
-void CFrame::OnRecordReadOnly(wxCommandEvent& event)
+void CFrame::OnRecordReadOnlyP1(wxCommandEvent& event)
 {
-  Movie::SetReadOnly(event.IsChecked());
+  Movie::SetReadOnly(event.IsChecked(), 4);
+}
+
+void CFrame::OnRecordReadOnlyP2(wxCommandEvent& event)
+{
+  Movie::SetReadOnly(event.IsChecked(), 5);
+}
+
+void CFrame::OnRecordReadOnlyP3(wxCommandEvent& event)
+{
+  Movie::SetReadOnly(event.IsChecked(), 6);
+}
+
+void CFrame::OnRecordReadOnlyP4(wxCommandEvent& event)
+{
+  Movie::SetReadOnly(event.IsChecked(), 7);
 }
 
 void CFrame::OnTASInput(wxCommandEvent& event)
@@ -790,12 +815,15 @@ void CFrame::OnRecord(wxCommandEvent& WXUNUSED(event))
 
   int controllers = 0;
 
-  if (Movie::IsReadOnly())
-  {
+  //if (Movie::IsReadOnly())
+  //{
     // The user just chose to record a movie, so that should take precedence
     Movie::SetReadOnly(false);
-    GetMenuBar()->FindItem(IDM_RECORD_READ_ONLY)->Check(false);
-  }
+    GetMenuBar()->FindItem(IDM_RECORD_READ_ONLY_P1)->Check(false);
+    GetMenuBar()->FindItem(IDM_RECORD_READ_ONLY_P2)->Check(false);
+    GetMenuBar()->FindItem(IDM_RECORD_READ_ONLY_P3)->Check(false);
+    GetMenuBar()->FindItem(IDM_RECORD_READ_ONLY_P4)->Check(false);
+  //}
 
   for (int i = 0; i < 4; i++)
   {
@@ -825,7 +853,10 @@ void CFrame::OnPlayRecording(wxCommandEvent& WXUNUSED(event))
   {
     // let's make the read-only flag consistent at the start of a movie.
     Movie::SetReadOnly(true);
-    GetMenuBar()->FindItem(IDM_RECORD_READ_ONLY)->Check();
+    GetMenuBar()->FindItem(IDM_RECORD_READ_ONLY_P1)->Check();
+    GetMenuBar()->FindItem(IDM_RECORD_READ_ONLY_P2)->Check();
+    GetMenuBar()->FindItem(IDM_RECORD_READ_ONLY_P3)->Check();
+    GetMenuBar()->FindItem(IDM_RECORD_READ_ONLY_P4)->Check();
   }
 
   if (Movie::PlayInput(WxStrToStr(path)))
@@ -1809,7 +1840,10 @@ void CFrame::UpdateGUI()
     }
   }
 
-  GetMenuBar()->FindItem(IDM_RECORD_READ_ONLY)->Enable(Running || Paused);
+  GetMenuBar()->FindItem(IDM_RECORD_READ_ONLY_P1)->Enable(Running || Paused);
+  GetMenuBar()->FindItem(IDM_RECORD_READ_ONLY_P2)->Enable(Running || Paused);
+  GetMenuBar()->FindItem(IDM_RECORD_READ_ONLY_P3)->Enable(Running || Paused);
+  GetMenuBar()->FindItem(IDM_RECORD_READ_ONLY_P4)->Enable(Running || Paused);
 
   if (!Initialized && !m_bGameLoading)
   {

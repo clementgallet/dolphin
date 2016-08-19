@@ -119,6 +119,7 @@ bool IsJustStartingPlayingInputFromSaveState();
 bool IsPlayingInput();
 bool IsMovieActive();
 bool IsReadOnly();
+bool IsReadOnly(int controller);
 u64 GetRecordingStartTime();
 
 u64 GetCurrentFrame();
@@ -157,6 +158,7 @@ void ChangeWiiPads(bool instantly = false);
 
 void DoFrameStep();
 void SetReadOnly(bool bEnabled);
+void SetReadOnly(bool bEnabled, int controller);
 
 void SetFrameSkipping(unsigned int framesToSkip);
 void FrameSkipping();

@@ -9,6 +9,7 @@
 #include <mbedtls/config.h>
 #include <mbedtls/md.h>
 #include <mutex>
+#include <iostream>
 
 #include "Common/ChunkFile.h"
 #include "Common/CommonPaths.h"
@@ -49,7 +50,7 @@ static std::mutex cs_frameSkip;
 namespace Movie
 {
 static bool s_bFrameStep = false;
-static bool s_bReadOnly = true;
+static u8 s_readOnly = 0;
 static u32 s_rerecords = 0;
 static PlayMode s_playMode = MODE_NONE;
 
@@ -318,10 +319,22 @@ void DoFrameStep()
 // NOTE: Host Thread
 void SetReadOnly(bool bEnabled)
 {
-  if (s_bReadOnly != bEnabled)
-    Core::DisplayMessage(bEnabled ? "Read-only mode." : "Read+Write mode.", 1000);
+  if (bEnabled)
+    s_readOnly = s_numPads;
+  else
+    s_readOnly = 0;
+}
 
-  s_bReadOnly = bEnabled;
+// NOTE: Host Thread
+void SetReadOnly(bool bEnabled, int controller)
+{
+  if (IsReadOnly(controller) != bEnabled)
+    Core::DisplayMessage(bEnabled ? StringFromFormat("P%d Read-only mode.", controller) : StringFromFormat("P%d Read+Write mode.", controller), 1000);
+
+  if (bEnabled)
+    s_readOnly |= (1 << controller);
+  else
+    s_readOnly &= 0xFF ^ (1 << controller);
 }
 
 // NOTE: GPU Thread
@@ -372,7 +385,12 @@ bool IsMovieActive()
 
 bool IsReadOnly()
 {
-  return s_bReadOnly;
+  return s_readOnly == s_numPads;
+}
+
+bool IsReadOnly(int controller)
+{
+  return (s_readOnly >> controller) & 1;
 }
 
 u64 GetRecordingStartTime()
@@ -911,21 +929,23 @@ void CheckWiimoteStatus(int wiimote, u8* data, const WiimoteEmu::ReportFeatures&
 {
   SetWiiInputDisplayString(wiimote, data, rptf, ext, key);
 
-  if (IsRecordingInput())
+  if (IsRecordingInput() && !IsReadOnly(wiimote + 4))
     RecordWiimote(wiimote, data, rptf.size);
 }
 
 void RecordWiimote(int wiimote, u8* data, u8 size)
 {
-  if (!IsRecordingInput() || !IsUsingWiimote(wiimote))
+  if (!IsRecordingInput() || !IsUsingWiimote(wiimote) || IsReadOnly(wiimote + 4))
     return;
 
+  //std::cerr << "Record input for P" << wiimote << " (ro: " << (int)s_readOnly << ")" << std::endl;
   InputUpdate();
-  EnsureTmpInputSize((size_t)(s_currentByte + size + 1));
+  EnsureTmpInputSize((size_t)(s_totalBytes + size + 1));
   tmpInput[s_currentByte++] = size;
   memcpy(&(tmpInput[s_currentByte]), data, size);
+  if (s_totalBytes < s_currentByte)
+    s_totalBytes += size + 1;
   s_currentByte += size;
-  s_totalBytes = s_currentByte;
 }
 
 // NOTE: EmuThread / Host Thread
@@ -1058,7 +1078,7 @@ void LoadInput(const std::string& filename)
     return;
   }
   ReadHeader();
-  if (!s_bReadOnly)
+  if (!IsReadOnly())
   {
     s_rerecords++;
     tmpHeader.numRerecords = s_rerecords;
@@ -1083,7 +1103,7 @@ void LoadInput(const std::string& filename)
     afterEnd = true;
   }
 
-  if (!s_bReadOnly || tmpInput == nullptr)
+  if (s_readOnly == 0 || tmpInput == nullptr)
   {
     s_totalFrames = tmpHeader.frameCount;
     s_totalLagCount = tmpHeader.lagCount;
@@ -1178,7 +1198,7 @@ void LoadInput(const std::string& filename)
 
   if (!afterEnd)
   {
-    if (s_bReadOnly)
+    if (IsReadOnly())
     {
       if (s_playMode != MODE_PLAYING)
       {
@@ -1207,7 +1227,7 @@ static void CheckInputEnd()
   if (s_currentByte >= s_totalBytes ||
       (CoreTiming::GetTicks() > s_totalTickCount && !IsRecordingInputFromSaveState()))
   {
-    EndPlayInput(!s_bReadOnly);
+    EndPlayInput(!IsReadOnly());
   }
 }
 
@@ -1223,7 +1243,7 @@ void PlayController(GCPadStatus* PadStatus, int controllerID)
   {
     PanicAlertT("Premature movie end in PlayController. %u + 8 > %u", (u32)s_currentByte,
                 (u32)s_totalBytes);
-    EndPlayInput(!s_bReadOnly);
+    EndPlayInput(!IsReadOnly());
     return;
   }
 
@@ -1317,14 +1337,14 @@ void PlayController(GCPadStatus* PadStatus, int controllerID)
 bool PlayWiimote(int wiimote, u8* data, const WiimoteEmu::ReportFeatures& rptf, int ext,
                  const wiimote_key key)
 {
-  if (!IsPlayingInput() || !IsUsingWiimote(wiimote) || tmpInput == nullptr)
+  if ((!IsPlayingInput() && !IsReadOnly(wiimote + 4)) || !IsUsingWiimote(wiimote) || tmpInput == nullptr)
     return false;
 
   if (s_currentByte > s_totalBytes)
   {
     PanicAlertT("Premature movie end in PlayWiimote. %u > %u", (u32)s_currentByte,
                 (u32)s_totalBytes);
-    EndPlayInput(!s_bReadOnly);
+    EndPlayInput(!IsReadOnly());
     return false;
   }
 
@@ -1339,7 +1359,7 @@ bool PlayWiimote(int wiimote, u8* data, const WiimoteEmu::ReportFeatures& rptf, 
                 (s_numPads & 0xF) ? " Try re-creating the recording with all GameCube controllers "
                                     "disabled (in Configure > GameCube > Device Settings)." :
                                     "");
-    EndPlayInput(!s_bReadOnly);
+    EndPlayInput(!IsReadOnly());
     return false;
   }
 
@@ -1349,9 +1369,11 @@ bool PlayWiimote(int wiimote, u8* data, const WiimoteEmu::ReportFeatures& rptf, 
   {
     PanicAlertT("Premature movie end in PlayWiimote. %u + %d > %u", (u32)s_currentByte, size,
                 (u32)s_totalBytes);
-    EndPlayInput(!s_bReadOnly);
+    EndPlayInput(!IsReadOnly());
     return false;
   }
+
+  //std::cerr << "Play input for P" << wiimote << " (ro: " << (int)s_readOnly << ")" << std::endl;
 
   memcpy(data, &(tmpInput[s_currentByte]), size);
   s_currentByte += size;
@@ -1368,6 +1390,7 @@ void EndPlayInput(bool cont)
   if (cont)
   {
     s_playMode = MODE_RECORDING;
+    SetReadOnly(false);
     Core::DisplayMessage("Reached movie end. Resuming recording.", 2000);
   }
   else if (s_playMode != MODE_NONE)

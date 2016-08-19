@@ -638,7 +638,7 @@ void Wiimote::Update()
 
   const ReportFeatures& rptf = reporting_mode_features[m_reporting_mode - WM_REPORT_CORE];
   s8 rptf_size = rptf.size;
-  if (Movie::IsPlayingInput() &&
+  if ((Movie::IsPlayingInput() || (Movie::IsRecordingInput() && Movie::IsReadOnly(m_index + 4))) &&
       Movie::PlayWiimote(m_index, data, rptf, m_extension->active_extension, m_ext_key))
   {
     if (rptf.core)
